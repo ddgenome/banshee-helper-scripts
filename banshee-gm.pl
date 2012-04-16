@@ -57,7 +57,7 @@ while (my $row = $track_s->fetchrow_arrayref) {
     my ($id, $uri) = @$row;
     # make sure it is a local music file
     my $prefix = "file://$ENV{HOME}/Music";
-    next unless $uri =~ m/^$prefix/;
+    next unless $uri =~ m/^$prefix/o;
     next if $uri =~ m/\.pdf$/; # skip pdf files
     if ($uri !~ m/\.(ogg|flac|mp3|m4a)$/i) {
         warn("$pkg: not a supported audio file, skipping: $uri\n");
