@@ -3,11 +3,11 @@ music library, including syncing with Google Play Music (gm).
 
 README
 banshee-db-sync.pl        set playcount information from old library to new one
+banshee-diff.pl           consistency check between ligrary and file system
 banshee-gm-diff.py        diff b and gm libraries
 banshee-gm-intersect.pl   defunct script replaced by banshee-gm-diff.py
 banshee-gm.pl             create hard links in separate directory structure for
                           tracks of rating three or greater to use as gm sync
 banshee-playlist.pl       extract playlists from b library
 banshee-recent.pl         list recently played or added b tracks
-banshee-tracks.pl         consistency check between ligrary and file system
 banshee-uri.pl            correct uri of tracks
