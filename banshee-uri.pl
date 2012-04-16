@@ -1,5 +1,6 @@
 #! /usr/bin/env perl
 # correct uri of tracks when they get out of sync
+# one time hack, do not use without checking
 use warnings;
 use strict;
 
