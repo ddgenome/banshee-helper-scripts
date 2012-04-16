@@ -19,7 +19,7 @@ unless (GetOptions(help => sub { print "$pkg [OPTIONS]...\n" },
 
 # connect to database
 my $dbh = DBI->connect(
-    "dbi:SQLite:dbname=banshee.db",
+    "dbi:SQLite:dbname=$ENV{HOME}/.config/banshee-1/banshee.db",
     '', '', { RaiseError => 1, AutoCommit => 0 }
 );
 
@@ -33,22 +33,12 @@ $track_s->execute;
 my $tracks = 0;
 while (my $row = $track_s->fetchrow_arrayref) {
     ++$tracks;
-    my ($id, $old_uri) = @$row;
-    # fix Uri
-    my $uri = $old_uri;
-    $uri =~ s/00\.%20//;
-    # update track
-    if ($check) {
-        print("$pkg: $id:$old_uri => $uri\n");
-    }
-    else {
-        $update_s->execute($uri, $id);
-    }
+    my ($id, $uri) = @$row;
+    # FIXME
 }
 print("$pkg: Updated $tracks tracks\n");
 
 $track_s->finish;
-$update_s->finish;
 $dbh->commit;
 $dbh->disconnect;
 
