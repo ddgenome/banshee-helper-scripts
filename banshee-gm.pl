@@ -13,14 +13,14 @@ use Pod::Usage;
 use URI::Escape;
 
 my $pkg = 'banshee-gm';
-my $version = '0.3';
+my $version = '0.4';
 my $archive = '/home/archive/ddooling';
 
 # process command line options
-my ($dryrun, $verbose);
+my ($dryrun, $quiet);
 unless (GetOptions(help => sub { &pod2usage(-exitval => 0) },
                    'dry-run' => \$dryrun,
-                   verbose => \$verbose,
+                   quiet => \$quiet,
                    version => sub { print "$pkg $version\n"; exit 0 }))
 {
     warn("Try `$pkg --help' for more information.\n");
@@ -85,7 +85,7 @@ while (my $row = $track_s->fetchrow_arrayref) {
     # link in the file
     if ($dryrun || (system('ln', $src, $dest) == 0)) {
         ++$links;
-        print("$pkg: created $dest\n") if $verbose;
+        &status("created $dest");
     }
     else {
         warn("$pkg: failed to link $src to $dest");
@@ -101,9 +101,16 @@ find(\&track_check, "$archive/gm/GoogleMusic");
 finddepth(\&empty_dir, "$archive/gm/GoogleMusic");
 
 # report what was done
-print("$pkg: found $rows rows, $tracks tracks, created $links links, deleted $delete tracks\n");
+&status("found $rows rows, $tracks tracks, created $links links, deleted $delete tracks");
 
 exit(0);
+
+sub status {
+    my ($msg) = @_;
+    return 1 if $quiet;
+    chomp($msg);
+    return print("$pkg: $msg\n");
+}
 
 sub track_check {
     my $track = $File::Find::name;
@@ -111,7 +118,7 @@ sub track_check {
     if (!exists($gm{$track})) {
         if ($dryrun || unlink($track)) {
             ++$delete;
-            print("$pkg: removed $track\n") if $verbose;
+            &status("removed $track");
         }
         else {
             warn("$pkg: failed to remove $track");
@@ -138,7 +145,7 @@ sub empty_dir {
         $dh->close;
         # remove the empty directory
         if ($dryrun || rmdir($dir)) {
-            print("$pkg: removed empty directory $dir\n") if $verbose;
+            &status("removed empty directory $dir");
         }
         else {
             warn("$pkg: failed to remove empty directory $dir");
@@ -158,7 +165,7 @@ banshee-gm - Synchronize good Music to GoogleMusic
 
 =head1 SYNOPSIS
 
-B<gxfer-upload> [OPTIONS]...
+B<banshee-gm> [OPTIONS]...
 
 =head1 DESCRIPTION
 
@@ -182,9 +189,9 @@ Do not actually create or delete any files in the GoogleMusic directory.
 
 Display a brief description and listing of all available options.
 
-=item --verbose
+=item --quiet
 
-Report all changes to stdout.
+Do not print out file creation or deletion events.
 
 =item --version
 
