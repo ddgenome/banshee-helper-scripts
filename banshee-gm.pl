@@ -18,9 +18,11 @@ my $archive = '/home/archive/ddooling';
 
 # process command line options
 my ($dryrun, $quiet);
+my $rating = 3;
 unless (GetOptions(help => sub { &pod2usage(-exitval => 0) },
                    'dry-run' => \$dryrun,
                    quiet => \$quiet,
+                   'rating=i' => \$rating,
                    version => sub { print "$pkg $version\n"; exit 0 }))
 {
     warn("Try `$pkg --help' for more information.\n");
@@ -42,10 +44,10 @@ if (!defined($dbh)) {
 my $track_q = q(
   select TrackID, Uri
   from CoreTracks
-  where Rating > 2
+  where Rating >= ?
 );
 my $track_s = $dbh->prepare($track_q);
-$track_s->execute;
+$track_s->execute($rating);
 my $rows = 0;
 my $tracks = 0;
 my $links = 0;
@@ -170,9 +172,10 @@ B<banshee-gm> [OPTIONS]...
 =head1 DESCRIPTION
 
 This programs reads a Banshee database and hard links the songs with
-ratings greater than two into the ~/GoogleMusic directory.  It also
-removes any files under GoogleMusic that are not in the Banshee database
-with more than two stars.
+ratings greater than or equal to a specified value (3 by default) into
+the ~/GoogleMusic directory.  It also removes any files under
+GoogleMusic that are not in the Banshee database with more than the
+specified rating.
 
 =head1 OPTIONS
 
@@ -192,6 +195,11 @@ Display a brief description and listing of all available options.
 =item --quiet
 
 Do not print out file creation or deletion events.
+
+=item --rating=STARS
+
+Only hard link music files with a rating greater than or equal to
+STARS.  Default is 3.
 
 =item --version
 
