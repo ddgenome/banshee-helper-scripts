@@ -108,9 +108,11 @@ B<banshee-diff> [OPTIONS]...
 
 =head1 DESCRIPTION
 
-This programs reads a Banshee database and the file system and
+Sometimes, Banshee gets confused when updating file metadata and file
+names and the URI in the database and the file system path get out of
+sync.  This programs reads a Banshee database and the file system and
 determines files that are either missing from the database or missing
-from the file system.  It makes not attempt to correct the errors.
+from the file system.  It makes no attempt to correct the errors.
 
 =head1 OPTIONS
 
