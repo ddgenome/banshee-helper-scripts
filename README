@@ -1,13 +1,17 @@
 This repo contains a set of scripts I use to help me manage my Banshee (b)
 music library, including syncing with Google Play Music (gm).
 
+Long term, the plan is to migrate all the Banshee stuff into a Python
+module and then write a tool to sync Banshee metadata with Google Music
+(leaving the file upload and download to Google Music Manager).
+
 README
 banshee-db-sync.pl        set playcount information from old library to new one
-banshee-diff.pl           consistency check between ligrary and file system
-banshee-gm-diff.py        diff b and gm libraries
+banshee-diff.pl           consistency check between database and file system
+banshee-gm-diff.py        diff banshee and google music libraries
 banshee-gm-intersect.pl   defunct script replaced by banshee-gm-diff.py
 banshee-gm.pl             create hard links in separate directory structure for
                           tracks of rating three or greater to use as gm sync
-banshee-playlist.pl       extract playlists from b library
-banshee-recent.pl         list recently played or added b tracks
-banshee-uri.pl            correct uri of tracks
+banshee-playlist.pl       extract playlists from banshee library
+banshee-recent.pl         list recently played or added banshee tracks
+banshee-uri.pl            correct uri of tracks (one off script)
