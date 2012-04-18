@@ -57,11 +57,33 @@ def init():
 def make_track_key(n, title, album, artist):
     """Create dictionary key from track information."""
 
+    # compile regular expression
+    re_paren = re.compile('[[(][^)\]]*[)\]]')
+    re_nonword = re.compile('[^\w\s]')
+    re_mspace = re.compile('[\s]')
+    re_prespace = re.compile('^\s+')
+    re_postspace = re.compile('\s+$')
+
     # create dictionary key
-    key_items = [n, title, album, artist]
-    key_items_u = map(unicode, key_items)
-    key_items_lc = map(unicode.lower, key_items_u)
-    key = '|'.join(key_items_lc)
+    key_items = []
+    for item in [n, title, album, artist]:
+        # cast to unicode
+        item = unicode(item)
+        # lower case
+        item = item.lower()
+        # remove parenthetical comments
+        item = re_paren.sub('', item)
+        # remove junk
+        #item = re_nonword.sub('', item)
+        # deal with leading, trailing, and multiple spaces
+        item = re_mspace.sub(' ', item)
+        item = re_prespace.sub('', item)
+        item = re_postspace.sub('', item)
+
+        # add to list
+        key_items.append(item)
+
+    key = '|'.join(key_items)
 
     return key
 
@@ -84,24 +106,25 @@ def get_gm_library(api):
 
     # collect gm tracks
     gm_tracks = {}
+    gm_dups = {}
     for t in gm_library:
         # check input data
         if not 'track' in t:
             t['track'] = 0
         key = make_track_key(t['track'], t['title'], t['album'], t['artist'])
-        if t['track'] == 0:
-            print "gm no track number:", key
+        #if t['track'] == 0:
+        #    print "gm no track number:", key
 
         # check for dups
         if key in gm_tracks:
-            print 'gm dup: ', key
-            #pp = pprint.PrettyPrinter(indent=4)
-            #pp.pprint(gm_tracks[key])
-            #pp.pprint(t)
+            if key in gm_dups:
+                gm_dups[key].append(t)
+            else:
+                gm_dups[key] = [gm_tracks[key], t]
         else:
             gm_tracks[key] = t
 
-    return gm_tracks
+    return (gm_tracks, gm_dups)
 
 def get_b_library(rating):
     """Read Banshee database and return dictionary tracks with rating greater than the argument."""
@@ -119,8 +142,15 @@ def get_b_library(rating):
         join CoreArtists as a on t.ArtistID = a.ArtistID
         join CoreAlbums as l on t.AlbumID = l.AlbumID
       where t.Rating >= ?''', t)
-    # record tracks
+
+    # compile regular expressions
+    re_prefix = re.compile('^file://' + os.environ['HOME'] + '/Music')
+    re_pdf = re.compile('\.pdf$', re.I)
+    re_mime = re.compile('\.(ogg|flac|mp3|m4a)$', re.I)
+
+    # process tracks
     b_tracks = {}
+    b_dups = {}
     for row in banshee_c:
         t= {}
         t['id'] = row[0]
@@ -133,18 +163,15 @@ def get_b_library(rating):
         t['album'] = row[7]
 
         # only look at local files
-        prefix = re.compile('^file://' + os.environ['HOME'] + '/Music')
-        if not prefix.search(t['uri']):
+        if not re_prefix.search(t['uri']):
             continue
 
         # skip pdf files
-        pdf = re.compile('\.pdf$', re.I)
-        if pdf.search(t['uri']):
+        if re_pdf.search(t['uri']):
             continue
 
         # check for know file types
-        mime = re.compile('\.(ogg|flac|mp3|m4a)$', re.I)
-        if not mime.search(t['uri']):
+        if not re_mime.search(t['uri']):
             print 'unknown file type: ', (t['uri'])
             continue
 
@@ -153,19 +180,18 @@ def get_b_library(rating):
 
         # see if track is a duplicate
         if key in b_tracks:
-            print "Banshee track appears multiple times: {0}, {1}".format(
-                    b_tracks[key], t['uri'])
+            if key in b_dups:
+                b_dups[key].append(t['uri'])
+            else:
+                b_dups[key] = [b_tracks[key], t['uri']]
         else:
             b_tracks[key] = t['uri']
 
-    print len(b_tracks), "banshee tracks found."
-
-    return b_tracks
+    return (b_tracks, b_dups)
 
 def main():
     """Main subroutine."""
 
-    # get the google music library
     # make a new instance of the api and prompt the user to log in
     api = init()
 
@@ -175,46 +201,26 @@ def main():
 
     print "Successfully logged in."
 
-    gm_tracks = get_gm_library(api)
+    # get the google music library
+    (gm_tracks, gm_dups) = get_gm_library(api)
 
     # get the banshee library
-    b_tracks = get_b_library(3)
+    (b_tracks, b_dups) = get_b_library(3)
 
-    # loop through btracks to see if they exist in gm
+    # loop through b_tracks to see if they exist in gm
     no_gm = {}
     for t_key in b_tracks:
         if not t_key in gm_tracks:
             #print 'no gm:', t_key
             no_gm[t_key] = b_tracks[t_key]
-            
+
+    print "gm tracks", len(gm_tracks)
+    print "gm dups", len(gm_dups)
+    print "banshee tracks", len(b_tracks)
+    print "banshee dups", len(b_dups)
     print "gm missing tracks", len(no_gm)
 
-    #We're going to create a new playlist and add a song to it.
-    #Songs are uniquely identified by 'song ids', so let's get the id:
-    #song_id = first_song["id"]
-
-    #print "I'm going to make a new playlist and add that song to it."
-    #print "Don't worry, I'll delete it when we're finished."
-    #print
-    #playlist_name = raw_input("Enter a name for the playlist: ")
-
-    #Like songs, playlists have unique ids.
-    #Note that Google Music allows more than one playlist of the
-    # exact same name, so you'll always have to work with ids.
-    #playlist_id = api.create_playlist(playlist_name)
-    #print "Made the playlist."
-    #print
-
-    #Now lets add the song to the playlist, using their ids:
-    #api.add_songs_to_playlist(playlist_id, song_id)
-    #print "Added the song to the playlist."
-    #print
-
-    #We're all done! The user can now go and see that the playlist is there.
-    #raw_input("You can now check on Google Music that the playlist exists. \n When done, press enter to delete the playlist:")
-    #api.delete_playlist(playlist_id)
-    #print "Deleted the playlist."
-
+    # FIXME
 
     # logout of gm
     api.logout()
