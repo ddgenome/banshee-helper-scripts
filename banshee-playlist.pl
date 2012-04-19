@@ -143,8 +143,9 @@ sub export_file {
 
     # create mp3
     my @lame_cmd = (qw(lame --quiet --preset medium), '--ta', $track{artist},
-                    '--tl', $track{album}, '--ty', $track{year}, '--tn', $track{n},
-                    '--tg', $track{genre}, '--tt', $track{title}, $wav, $mp3);
+                    '--tl', $track{album}, '--ty', $track{year},
+                    '--tn', $track{n}, '--tg', $track{genre},
+                    '--tt', $track{title}, $wav, $mp3);
     if (system(@lame_cmd) != 0) {
         warn("$pkg: failed to convert wav to mp3: $path");
         unlink($wav);
