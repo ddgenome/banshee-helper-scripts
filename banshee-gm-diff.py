@@ -26,14 +26,32 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import codecs
 import os
 import pprint
 import re
 import sqlite3
 import sys
+import urllib
+from distutils.dir_util import mkpath
 # https://github.com/simon-weber/Unofficial-Google-Music-API
 from gmusicapi.api import Api
 from getpass import getpass
+
+# setup stdout and stderr for utf-8
+reload(sys)
+sys.setdefaultencoding('utf-8')
+sys.stdout = codecs.getwriter('utf8')(sys.stdout)
+sys.stderr = codecs.getwriter('utf8')(sys.stderr)
+
+pkg = 'banshee-gm-diff'
+version = '0.1'
+
+def status(msg):
+    """Print status messages."""
+
+    print u"{0}: {1}".format(pkg, msg)
+    return
 
 def init():
     """Makes an instance of the api and attempts to login with it.
@@ -55,7 +73,15 @@ def init():
     return api
 
 def make_track_key(n, title, album, artist):
-    """Create dictionary key from track information."""
+    """Create dictionary key from track information.
+
+    n        track number
+    title    track title
+    album    track album
+    artist   track artist
+
+    This method creates a string from the arguments after some cleaning.
+"""
 
     # compile regular expression
     re_paren = re.compile('[[(][^)\]]*[)\]]')
@@ -92,11 +118,11 @@ def get_gm_library(api):
 
     # get all of the users songs
     # library is a list of dictionaries, each of which contains a single song
-    print "Loading library...",
+    status("loading library")
     gm_library = api.get_all_songs()
-    print "done."
+    status("library loading complete")
 
-    print len(gm_library), "gm tracks found."
+    status("{0} gm tracks found".format(len(gm_library)))
 
     for song in gm_library:
         if song['titleNorm'] == u'surrender':
@@ -109,7 +135,7 @@ def get_gm_library(api):
     gm_dups = {}
     for t in gm_library:
         # check input data
-        if not 'track' in t:
+        if 'track' not in t:
             t['track'] = 0
         key = make_track_key(t['track'], t['title'], t['album'], t['artist'])
         #if t['track'] == 0:
@@ -172,7 +198,7 @@ def get_b_library(rating):
 
         # check for know file types
         if not re_mime.search(t['uri']):
-            print 'unknown file type: ', (t['uri'])
+            status('unknown file type: {0}'.format(t['uri']))
             continue
 
         # create dictionary key
@@ -189,6 +215,91 @@ def get_b_library(rating):
 
     return (b_tracks, b_dups)
 
+def link_uploads(upload):
+    """Create directory structure and hard link tracks in Banshee that need to be uploaded to Google Music."""
+
+    # set root paths and account for sym links
+    home = os.environ['HOME']
+    src_root = home + '/Music'
+    target_root =  home + '/GoogleMusicUp'
+
+    # prepare regex
+    local_uri_re = re.compile('^file://')
+    src_root_re = re.compile('^' + src_root)
+
+    # open error log
+    error_f = codecs.open('b-gm.err', mode='w', encoding='utf-8')
+
+    # iterate over items that need to be created
+    links = {}
+    for (key, uri) in upload.iteritems():
+        # make sure it is local
+        if not local_uri_re.match(uri):
+            sys.stderr.write('not a local file: {0}\n'.format(uri))
+            continue
+
+        # unescape uri
+        src_uri = urllib.unquote(uri)#.decode('utf8')
+        # remove type (file://)
+        src = src_uri[7:]
+        # initiate link path
+        link = src_root_re.sub(target_root, src)
+        # determine real paths
+        src_real = os.path.realpath(src)
+        link_real = os.path.realpath(link)
+
+        # see if link already exists
+        if os.path.exists(link_real):
+            continue
+
+        # REMOVE: testing
+        error_f.write(u'uri: {0}\n'.format(uri))
+        error_f.write(u'src_uri: {0}\n'.format(src_uri))
+        error_f.write(u'src: {0}\n'.format(src))
+        error_f.write(u'link: {0}\n'.format(link))
+        error_f.write(u'src_real: {0}\n'.format(src_real))
+        error_f.write(u'link_real: {0}\n'.format(link_real))
+
+        # make sure source exists
+        if not os.path.exists(src_real):
+            error_f.write(u'original file does not exist: {0}\n'.format(src))
+            continue
+
+        # create path to link
+        link_dir = os.path.dirname(link_real)
+        if not mkpath(link_dir):
+            error_f.write(u'failed to create dir: {0}\n'.format(link_dir))
+            continue
+        # create hard link
+        if not os.link(src_real, link_real):
+            error_f.write(u'failed to link: {0}, {1}\n'.format(src_real, link_real))
+            continue
+
+        status(u"created link: {0}, {1}".format(src_real, link_real))
+        # store valid links for later pruning
+        links[link_real] = 1
+
+    # close error log
+    error_f.close
+
+    return
+
+    # remove unneeded files and directories
+    real_target_root = os.path.realpath(target_root)
+    # loop through all files
+    for (root, dirnames, filenames) in os.walk(real_target_root):
+        # create full path
+        for filename in filenames:
+            path = os.path.join(root, filename)
+            # make sure it does not belong
+            if path in links:
+                continue
+            # rm the file
+            #os.unlink(path)
+            status("removed {0}".format(path))
+
+    # loop again to find empty directories
+
 def main():
     """Main subroutine."""
 
@@ -199,10 +310,13 @@ def main():
         print "Sorry, those credentials weren't accepted."
         return
 
-    print "Successfully logged in."
+    status("successfully logged in")
 
     # get the google music library
     (gm_tracks, gm_dups) = get_gm_library(api)
+
+    # logout of gm
+    api.logout()
 
     # get the banshee library
     (b_tracks, b_dups) = get_b_library(3)
@@ -210,20 +324,33 @@ def main():
     # loop through b_tracks to see if they exist in gm
     no_gm = {}
     for t_key in b_tracks:
-        if not t_key in gm_tracks:
+        if t_key not in gm_tracks:
             #print 'no gm:', t_key
             no_gm[t_key] = b_tracks[t_key]
 
-    print "gm tracks", len(gm_tracks)
-    print "gm dups", len(gm_dups)
-    print "banshee tracks", len(b_tracks)
-    print "banshee dups", len(b_dups)
-    print "gm missing tracks", len(no_gm)
+    status("gm tracks {0}".format(len(gm_tracks)))
+    status("gm dups {0}".format(len(gm_dups)))
+    status("banshee tracks {0}".format(len(b_tracks)))
+    status("banshee dups {0}".format(len(b_dups)))
+    status("gm missing tracks {0}".format(len(no_gm)))
 
-    # FIXME
+    # write gm dups
+    with codecs.open('gm.dup', mode='w', encoding='utf-8') as gm_dup_f:
+        for k in sorted(gm_dups.keys()):
+            gm_dup_f.write(k + '\n')
 
-    # logout of gm
-    api.logout()
+    # write banshee dups
+    with codecs.open('b.dup', mode='w', encoding='utf-8') as b_dup_f:
+        for k in sorted(b_dups.keys()):
+            b_dup_f.write(k + '\n')
+
+    # write tracks that need to up uploaded
+    with codecs.open('b-gm.up', mode='w', encoding='utf-8') as up_f:
+        for k in sorted(no_gm.keys()):
+            up_f.write(k + '\n')
+
+    # create directory suitable for google music manager
+    link_uploads(no_gm)
 
 if __name__ == '__main__':
     main()
