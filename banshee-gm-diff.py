@@ -28,7 +28,6 @@
 
 import codecs
 import os
-import pprint
 import re
 import sqlite3
 import sys
@@ -47,10 +46,12 @@ sys.stderr = codecs.getwriter('utf8')(sys.stderr)
 pkg = 'banshee-gm-diff'
 version = '0.1'
 
+status_f = codecs.open(pkg + '.out', mode='w', encoding='utf-8')
 def status(msg):
     """Print status messages."""
 
     print u"{0}: {1}".format(pkg, msg)
+    status_f.write(u"{0}\n".format(msg))
     return
 
 def init():
@@ -86,7 +87,7 @@ def make_track_key(n, title, album, artist):
     # compile regular expression
     re_paren = re.compile('[[(][^)\]]*[)\]]')
     re_nonword = re.compile('[^\w\s]')
-    re_mspace = re.compile('[\s]')
+    re_mspace = re.compile('\s+')
     re_prespace = re.compile('^\s+')
     re_postspace = re.compile('\s+$')
 
@@ -99,8 +100,8 @@ def make_track_key(n, title, album, artist):
         item = item.lower()
         # remove parenthetical comments
         item = re_paren.sub('', item)
-        # remove junk
-        #item = re_nonword.sub('', item)
+        # remove nonword junk
+        item = re_nonword.sub('', item)
         # deal with leading, trailing, and multiple spaces
         item = re_mspace.sub(' ', item)
         item = re_prespace.sub('', item)
@@ -123,12 +124,6 @@ def get_gm_library(api):
     status("library loading complete")
 
     status("{0} gm tracks found".format(len(gm_library)))
-
-    for song in gm_library:
-        if song['titleNorm'] == u'surrender':
-            #pp = pprint.PrettyPrinter(indent=4)
-            #pp.pprint(song)
-            break
 
     # collect gm tracks
     gm_tracks = {}
@@ -227,78 +222,72 @@ def link_uploads(upload):
     local_uri_re = re.compile('^file://')
     src_root_re = re.compile('^' + src_root)
 
-    # open error log
-    error_f = codecs.open('b-gm.err', mode='w', encoding='utf-8')
-
+    # dictionary for valid links
+    valid_links = {}
     # iterate over items that need to be created
-    links = {}
     for (key, uri) in upload.iteritems():
         # make sure it is local
         if not local_uri_re.match(uri):
             sys.stderr.write('not a local file: {0}\n'.format(uri))
             continue
 
-        # unescape uri
-        src_uri = urllib.unquote(uri)#.decode('utf8')
-        # remove type (file://)
+        # unescape uri (avoid unicode confusion by forcing ascii)
+        src_uri = urllib.unquote(uri.encode('ascii'))
+        # remove protocol (file://)
         src = src_uri[7:]
         # initiate link path
         link = src_root_re.sub(target_root, src)
         # determine real paths
         src_real = os.path.realpath(src)
         link_real = os.path.realpath(link)
+        # store valid links for later pruning
+        valid_links[link_real] = 1
 
         # see if link already exists
         if os.path.exists(link_real):
             continue
 
-        # REMOVE: testing
-        error_f.write(u'uri: {0}\n'.format(uri))
-        error_f.write(u'src_uri: {0}\n'.format(src_uri))
-        error_f.write(u'src: {0}\n'.format(src))
-        error_f.write(u'link: {0}\n'.format(link))
-        error_f.write(u'src_real: {0}\n'.format(src_real))
-        error_f.write(u'link_real: {0}\n'.format(link_real))
-
         # make sure source exists
         if not os.path.exists(src_real):
-            error_f.write(u'original file does not exist: {0}\n'.format(src))
+            sys.stderr.write(u'original file does not exist: {0}, {1}, {2}\n'.format(uri, src_uri, src))
             continue
 
         # create path to link
         link_dir = os.path.dirname(link_real)
-        if not mkpath(link_dir):
-            error_f.write(u'failed to create dir: {0}\n'.format(link_dir))
-            continue
+        if not os.path.exists(link_dir):
+            if not mkpath(link_dir):
+                sys.stderr.write(u'failed to create dir: {0}\n'.format(link_dir))
+                continue
         # create hard link
-        if not os.link(src_real, link_real):
-            error_f.write(u'failed to link: {0}, {1}\n'.format(src_real, link_real))
+        try:
+            os.link(src_real, link_real)
+        except OSError:
+            sys.stderr.write(u'failed to link: {0}, {1}\n'.format(src_real, link_real))
             continue
 
-        status(u"created link: {0}, {1}".format(src_real, link_real))
-        # store valid links for later pruning
-        links[link_real] = 1
-
-    # close error log
-    error_f.close
-
-    return
+        status(u"created link: {0}".format(link_real))
 
     # remove unneeded files and directories
-    real_target_root = os.path.realpath(target_root)
+    target_root_real = os.path.realpath(target_root)
     # loop through all files
-    for (root, dirnames, filenames) in os.walk(real_target_root):
+    for (root, dirs, files) in os.walk(target_root_real):
         # create full path
-        for filename in filenames:
-            path = os.path.join(root, filename)
+        for f in files:
+            path = os.path.join(root, f)
             # make sure it does not belong
-            if path in links:
+            if path in valid_links:
                 continue
             # rm the file
-            #os.unlink(path)
-            status("removed {0}".format(path))
+            os.unlink(path)
+            status("removed: {0}".format(path))
 
     # loop again to find empty directories
+    for (root, dirs, files) in os.walk(target_root_real, topdown=False):
+        for d in dirs:
+            path = os.path.join(root, d)
+            if not os.listdir(path):
+                os.rmdir(path)
+                status(u"removed empty directory: {0}".format(path))
 
 def main():
     """Main subroutine."""
@@ -354,4 +343,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+    status_f.close
     sys.exit(0)
