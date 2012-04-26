@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-# diff banshee and google music libraries
+# perform various push operations from banshee to Google Play Music
 
 # Copyright (c) 2012, Simon Weber
 # All rights reserved.
@@ -53,25 +53,6 @@ def status(msg):
     print u"{0}: {1}".format(pkg, msg)
     status_f.write(u"{0}\n".format(msg))
     return
-
-def init():
-    """Makes an instance of the api and attempts to login with it.
-    Returns the authenticated api.
-    """
-    
-    api = Api() 
-    
-    logged_in = False
-    attempts = 0
-
-    while not logged_in and attempts < 3:
-        email = raw_input("Email: ")
-        password = getpass()
-
-        logged_in = api.login(email, password)
-        attempts += 1
-
-    return api
 
 def make_track_key(n, title, album, artist):
     """Create dictionary key from track information.
@@ -252,6 +233,11 @@ def link_uploads(upload):
             sys.stderr.write(u'original file does not exist: {0}, {1}, {2}\n'.format(uri, src_uri, src))
             continue
 
+        # see if we are supposed to do anything
+        if test:
+            status(u"skipping link: {0}".format(link_real))
+            continue
+
         # create path to link
         link_dir = os.path.dirname(link_real)
         if not os.path.exists(link_dir):
@@ -278,7 +264,8 @@ def link_uploads(upload):
             if path in valid_links:
                 continue
             # rm the file
-            os.unlink(path)
+            if not test:
+                os.unlink(path)
             status("removed: {0}".format(path))
 
     # loop again to find empty directories
@@ -286,26 +273,15 @@ def link_uploads(upload):
         for d in dirs:
             path = os.path.join(root, d)
             if not os.listdir(path):
-                os.rmdir(path)
+                if not test:
+                    os.rmdir(path)
                 status(u"removed empty directory: {0}".format(path))
 
-def main():
-    """Main subroutine."""
-
-    # make a new instance of the api and prompt the user to log in
-    api = init()
-
-    if not api.is_authenticated():
-        print "Sorry, those credentials weren't accepted."
-        return
-
-    status("successfully logged in")
+def diff(api):
+    """Create directory structure with Banshee tracks not in Google Music."""
 
     # get the google music library
     (gm_tracks, gm_dups) = get_gm_library(api)
-
-    # logout of gm
-    api.logout()
 
     # get the banshee library
     (b_tracks, b_dups) = get_b_library(3)
@@ -341,7 +317,49 @@ def main():
     # create directory suitable for google music manager
     link_uploads(no_gm)
 
+def main(argv):
+    '''Farm out work to task based subroutines.'''
+
+    # process command line
+    command = ''
+    if len(argv) > 1:
+        command = argv[1]
+    else:
+        command = 'diff'
+
+    # log in to Google Music (gm)
+    api = Api() 
+    
+    logged_in = False
+    attempts = 0
+    while not logged_in and attempts < 3:
+        email = raw_input("Email: ")
+        password = getpass()
+
+        logged_in = api.login(email, password)
+        attempts += 1
+
+    if not api.is_authenticated():
+        print "Sorry, those credentials weren't accepted."
+        return
+
+    status("successfully logged in")
+
+    # clean up argument list
+    args = argv[2:]
+
+    if command == 'diff':
+        return diff(api, args)
+    else:
+        sys.stderr.write('{0}: unknown command: {1}\n'.format(pkg, command))
+        sys.exit(1)
+
+    # logout of gm
+    api.logout()
+
+
 if __name__ == '__main__':
-    main()
+    main(sys.argv)
+    # close status file
     status_f.close
     sys.exit(0)
