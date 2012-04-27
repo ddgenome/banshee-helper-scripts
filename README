@@ -5,13 +5,12 @@ Long term, the plan is to migrate all the Banshee stuff into a Python
 module and then write a tool to sync Banshee metadata with Google Music
 (leaving the file upload and download to Google Music Manager).
 
-README
+README                    this file
 banshee-db-sync.pl        set playcount information from old library to new one
-banshee-diff.pl           consistency check between database and file system
-banshee-gm-diff.py        diff banshee and google music libraries
-banshee-gm-intersect.pl   defunct script replaced by banshee-gm-diff.py
-banshee-gm.pl             create hard links in separate directory structure for
+banshee-fs-diff.pl        consistency check between database and file system
+banshee-gm-sync.pl        create hard links in separate directory structure for
                           tracks of rating three or greater to use as gm sync
+banshee-gm.py             diff banshee and google music libraries
 banshee-playlist.pl       extract playlists from banshee library
 banshee-recent.pl         list recently played or added banshee tracks
 banshee-uri.pl            correct uri of tracks (one off script)
