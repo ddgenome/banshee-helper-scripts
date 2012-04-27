@@ -494,6 +494,7 @@ def track(api, gm_tracks, b_tracks):
     '''
 
     # loop through banshee tracks
+    updates = []
     for (key, b_track) in b_tracks.iteritems():
         # see if tracks is in google music
         if key not in gm_tracks:
@@ -510,10 +511,14 @@ def track(api, gm_tracks, b_tracks):
             else:
                 update[gm_k] = gm_v
 
-        # update google music track metadata
-        if not api.change_song_metadata(update):
-            errmsg('failed to update metadata for track: {0}'.format(key))
-            continue
+        updates.append(update)
+
+    # update google music track metadata
+    updated = api.change_song_metadata(updates)
+    if updated:
+        logmsg('updated metadata for tracks: {0}'.format(len(updated)))
+    else:
+        errmsg('failed to update metadata for tracks')
 
     return True
 
