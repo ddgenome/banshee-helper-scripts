@@ -46,26 +46,24 @@ sys.stderr = codecs.getwriter('utf8')(sys.stderr)
 pkg = 'banshee-gm'
 version = '0.2'
 
-# set scope of log file handle
-log_f = False
-def logmsg(msg):
+# change to True to not create files or change gm library information
+# will still get all information, do comparisons, and print out what would
+# have been done
+dryrun = True
+
+def logmsg(msg, error=False):
     """Print status messages and write to log file.
 
     :param msg: text of message to record
+    :param error: set to True if it is an error message
     """
 
-    print u"{0}: {1}".format(pkg, msg)
-    log_f.write(u"{0}\n".format(msg))
-    return
-
-def errmsg(msg):
-    """Print error message to STDERR and write to log file.
-
-    :param msg: text of message to record
-    """
-
-    sys.stderr.write(u"{0}: {1}\n".format(pkg, msg))
-    log_f.write(u"ERROR: {0}\n".format(msg))
+    text = u"{0}: {1}".format(pkg, msg)
+    if error:
+        sys.stderr.write(text + u'\n')
+    else:
+        print text 
+    logmsg.log_f.write(u"{0}\n".format(msg))
     return
 
 def write_keys(filename, d):
@@ -205,8 +203,8 @@ def get_gm_playlists(api):
     for (name, ids) in playlists_ids.iteritems():
         # reject duplicates
         if len(ids) > 1:
-            errmsg('multiple google music playlists with same name: {0}'.format(
-                    name))
+            logmsg('multiple google music playlists with same name: {0}'.format(
+                    name), True)
             continue
 
         # get tracks
@@ -370,7 +368,7 @@ def link_tracks(tracks, up=False):
     for (key, uri) in tracks.iteritems():
         # make sure it is local
         if not local_uri_re.match(uri):
-            errmsg('not a local file: {0}'.format(uri))
+            logmsg('not a local file: {0}'.format(uri), True)
             continue
 
         # unescape uri (avoid unicode confusion by forcing ascii)
@@ -391,26 +389,23 @@ def link_tracks(tracks, up=False):
 
         # make sure source exists
         if not os.path.exists(src_real):
-            errmsg(u'original file does not exist: {0}, {1}, {2}'.format(uri,
-                   src_uri, src))
-            continue
-
-        # see if we are supposed to do anything
-        if test:
-            logmsg(u"skipping link: {0}".format(link_real))
+            logmsg(u'original file does not exist: {0}, {1}, {2}'.format(uri,
+                   src_uri, src), True)
             continue
 
         # create path to link
         link_dir = os.path.dirname(link_real)
-        if not os.path.exists(link_dir):
+        if not dryrun and not os.path.exists(link_dir):
             if not mkpath(link_dir):
-                errmsg(u'failed to create dir: {0}'.format(link_dir))
+                logmsg(u'failed to create dir: {0}'.format(link_dir), True)
                 continue
         # create hard link
         try:
-            os.link(src_real, link_real)
+            if not dryrun:
+                os.link(src_real, link_real)
         except OSError:
-            errmsg(u'failed to link: {0}, {1}'.format(src_real, link_real))
+            logmsg(u'failed to link: {0}, {1}'.format(src_real, link_real),
+                   True)
             continue
 
         logmsg(u"created link: {0}".format(link_real))
@@ -426,7 +421,7 @@ def link_tracks(tracks, up=False):
             if path in valid_links:
                 continue
             # rm the file
-            if not test:
+            if not dryrun:
                 os.unlink(path)
             logmsg("removed: {0}".format(path))
 
@@ -435,7 +430,7 @@ def link_tracks(tracks, up=False):
         for d in dirs:
             path = os.path.join(root, d)
             if not os.listdir(path):
-                if not test:
+                if not dryrun:
                     os.rmdir(path)
                 logmsg(u"removed empty directory: {0}".format(path))
 
@@ -498,7 +493,7 @@ def track(api, gm_tracks, b_tracks):
     for (key, b_track) in b_tracks.iteritems():
         # see if tracks is in google music
         if key not in gm_tracks:
-            errmsg('banshee track not in google music: {0}'.format(key))
+            logmsg('banshee track not in google music: {0}'.format(key), True)
             continue
 
         # create updated track dictionary
@@ -514,11 +509,13 @@ def track(api, gm_tracks, b_tracks):
         updates.append(update)
 
     # update google music track metadata
-    updated = api.change_song_metadata(updates)
-    if updated:
-        logmsg('updated metadata for tracks: {0}'.format(len(updated)))
-    else:
-        errmsg('failed to update metadata for tracks')
+    logmsg('updating information for tracks: {0}'.format(len(updates)))
+    if not dryrun:
+        updated = api.change_song_metadata(updates)
+        if updated:
+            logmsg('updated metadata for tracks: {0}'.format(len(updated)))
+        else:
+            logmsg('failed to update metadata for tracks', True)
 
     return True
 
@@ -527,7 +524,7 @@ def playlist(api, gm_tracks, b_playlists):
 
     :param api: Google Music API connection
     :param gm_tracks: dictionary of Google Music tracks
-    :param b_playlists: dictionary of Banshee playlists
+    :param b_playlists: dictionary of Banshee playlists to upload
     '''
 
     # get google music playlists
@@ -536,7 +533,7 @@ def playlist(api, gm_tracks, b_playlists):
     # loop through banshee playlists
     for (playlist_name, tracks) in b_playlists.iteritems():
         if playlist_name in gm_playlists:
-            errmsg('banshee playlist already exists as google music playlist: {0}'.format(b_playlist_name))
+            logmsg('banshee playlist already exists as google music playlist: {0}'.format(b_playlist_name), True)
             continue
 
         # create playlist
@@ -547,20 +544,21 @@ def playlist(api, gm_tracks, b_playlists):
         for t_key in tracks:
             # make sure song exists in gm_tracks
             if t_key not in gm_tracks:
-                errmsg('playlist track not in google music library: {0}, {1}'.format(playlist_name, t_key))
+                logmsg('playlist track not in google music library: {0}, {1}'.format(playlist_name, t_key), True)
                 continue
 
             # get gm track id
             track_id = gm_tracks[t_key]['id']
             if not track_id:
-                errmsg('google music track has no id: {0}, {1}'.format(
-                       playlist_name, t_key))
+                logmsg('google music track has no id: {0}, {1}'.format(
+                       playlist_name, t_key), True)
                 continue
 
             p_tracks.append(track_id)
 
         # add tracks to playlist (hopefully order is preserved)
-        api.add_songs_to_playlist(playlist_id, p_tracks)
+        if not dryrun:
+            api.add_songs_to_playlist(playlist_id, p_tracks)
 
         logmsg('created google music playlist: {0}'.format(playlist_name))
 
@@ -573,7 +571,7 @@ def main(argv):
     '''
 
     # open log file
-    log_f = codecs.open(pkg + '.log', mode='w', encoding='utf-8')
+    logmsg.log_f = codecs.open(pkg + '.log', mode='w', encoding='utf-8')
 
     # process command line
     command = ''
@@ -595,7 +593,7 @@ def main(argv):
         attempts += 1
 
     if not api.is_authenticated():
-        errmsg('google credentials were not accepted')
+        logmsg('google credentials were not accepted', True)
         return
 
     logmsg("successfully logged in to google")
@@ -604,7 +602,7 @@ def main(argv):
     banshee_db = os.environ['HOME'] + '/.config/banshee-1/banshee.db'
     banshee_conn = sqlite3.connect(banshee_db)
     if not banshee_conn:
-        errmsg('unable to connect to banshee: {0}'.format(banshee_db))
+        logmsg('unable to connect to banshee: {0}'.format(banshee_db), True)
         return
 
     # get the google music library
@@ -635,7 +633,7 @@ def main(argv):
         # upload banshee playlists to google music
         rv = playlist(api, gm_tracks, b_playlists)
     else:
-        errmsg('unknown command: {0}'.format(command))
+        logmsg('unknown command: {0}'.format(command), True)
         return
 
     # logout of gm
@@ -645,7 +643,7 @@ def main(argv):
     banshee_conn.close()
 
     # close log file
-    log_f.close
+    logmsg.log_f.close
 
     return rv
 
