@@ -49,7 +49,7 @@ version = '0.2'
 # change to True to not create files or change gm library information
 # will still get all information, do comparisons, and print out what would
 # have been done
-dryrun = True
+dryrun = False
 
 def logmsg(msg, error=False):
     """Print status messages and write to log file.
@@ -200,7 +200,7 @@ def get_gm_playlists(api):
                                             user=True, always_id_lists=True)
     # loop through names
     gm_playlists = {}
-    for (name, ids) in playlists_ids.iteritems():
+    for (name, ids) in playlist_ids['user'].iteritems():
         # reject duplicates
         if len(ids) > 1:
             logmsg('multiple google music playlists with same name: {0}'.format(
@@ -300,27 +300,43 @@ def get_b_library(banshee_conn, rating):
 
     return b_tracks
 
-def get_b_playlists(banshee_conn):
+def get_b_playlists(banshee_conn, playlists=[]):
     '''Return dictionary of Banshee playlists.
 
     :param banshee_conn: connection to Banshee database
+    :param playlists: playlists to return (return all if none specified)
 
     The dictionary has the names of the playlists as its keys and a list
     of track keys as its values.
     '''
 
-    # get cursor
-    banshee_c = banshee_conn.cursor()
-    # get all playlists
-    banshee_c.execute('select PlaylistID, Name from CorePlaylists')
+    # see if playlists were provided
+    if playlists:
+        # make sure they exist
+        for p_name in playlists:
+            banshee_c = banshee_conn.cursor()
+            t = (p_name,)
+            banshee_c.execute('select count(*) from CorePlayLists where Name = ?', t)
+            count = banshee_c.fetchone()[0]
+            if count == 0:
+                logmsg('banshee playlist does not exist: {0}'.format(p_name),
+                       True)
+            elif count > 1:
+                logmsg('multiple banshee playlists match: {0}'.format(p_name),
+                       True)
+    else:
+        # get all playlists from banshee database
+        banshee_c = banshee_conn.cursor()
+        banshee_c.execute('select Name from CorePlaylists')
+        # put them in a list
+        playlists = [row[0] for row in banshee_c.fetchall()]
 
     # loop through playlists
-    playlists = {}
-    for row in banshee_c:
-        (p_id, p_name) = row
-
+    b_playlists = {}
+    for p_name in playlists:
         # get cursor for playlist query
         banshee_p_c = banshee_conn.cursor()
+        t = (p_name,)
         banshee_p_c.execute('''
           select e.ViewOrder, a.Name, t.Title, t.TrackNumber, l.Title
           from CoreTracks as t
@@ -329,17 +345,17 @@ def get_b_playlists(banshee_conn):
             join CorePlaylistEntries as e on t.TrackID = e.TrackID
             join CorePlaylists as p on e.PlaylistID = p.PlaylistID
           where p.Name = ?
-          order by e.ViewOrder''')
+          order by e.ViewOrder''', t)
 
         # loop through playlist tracks
-        playlists[p_name] = []
+        b_playlists[p_name] = []
         for trow in banshee_p_c:
-            (pn, artist, title, n, album) = row
+            (pn, artist, title, n, album) = trow
             # create key
             key = make_track_key(n, title, album, artist)
-            playlists[p_name].append(key)
+            b_playlists[p_name].append(key)
 
-    return playlists
+    return b_playlists
 
 def link_tracks(tracks, up=False):
     """Create directory structure and hard link tracks in Banshee that need to be in Google Music.
@@ -533,11 +549,12 @@ def playlist(api, gm_tracks, b_playlists):
     # loop through banshee playlists
     for (playlist_name, tracks) in b_playlists.iteritems():
         if playlist_name in gm_playlists:
-            logmsg('banshee playlist already exists as google music playlist: {0}'.format(b_playlist_name), True)
+            logmsg('banshee playlist already exists as google music playlist: {0}'.format(playlist_name), True)
             continue
 
         # create playlist
-        playlist_id = api.create_playlist(playlist_name)
+        if not dryrun:
+            playlist_id = api.create_playlist(playlist_name)
 
         # loop through songs
         p_tracks = []
@@ -555,6 +572,7 @@ def playlist(api, gm_tracks, b_playlists):
                 continue
 
             p_tracks.append(track_id)
+            logmsg('added track to {0}: {1}'.format(playlist_name, t_key))
 
         # add tracks to playlist (hopefully order is preserved)
         if not dryrun:
@@ -582,21 +600,27 @@ def main(argv):
 
     # log in to Google Music (gm)
     api = Api() 
-    
-    logged_in = False
-    attempts = 0
-    while not logged_in and attempts < 3:
-        email = raw_input("Email: ")
-        password = getpass()
 
-        logged_in = api.login(email, password)
-        attempts += 1
+    gm_tracks = {}
+    # sync does not need connection to gm
+    if command != 'sync':
+        logged_in = False
+        attempts = 0
+        while not logged_in and attempts < 3:
+            email = raw_input("Email: ")
+            password = getpass()
 
-    if not api.is_authenticated():
-        logmsg('google credentials were not accepted', True)
-        return
+            logged_in = api.login(email, password)
+            attempts += 1
 
-    logmsg("successfully logged in to google")
+        if not api.is_authenticated():
+            logmsg('google credentials were not accepted', True)
+            return
+
+        logmsg("successfully logged in to google")
+
+        # get the google music library
+        gm_tracks = get_gm_library(api)
 
     # connect to banshee database
     banshee_db = os.environ['HOME'] + '/.config/banshee-1/banshee.db'
@@ -604,9 +628,6 @@ def main(argv):
     if not banshee_conn:
         logmsg('unable to connect to banshee: {0}'.format(banshee_db), True)
         return
-
-    # get the google music library
-    gm_tracks = get_gm_library(api)
 
     # make this a parameter at some point
     rating = 3
@@ -629,7 +650,7 @@ def main(argv):
         rv = track(api, gm_tracks, b_tracks)
     elif command == 'playlist':
         # get banshee playlists
-        b_playlists = get_b_playlists
+        b_playlists = get_b_playlists(banshee_conn, args)
         # upload banshee playlists to google music
         rv = playlist(api, gm_tracks, b_playlists)
     else:
