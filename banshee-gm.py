@@ -44,7 +44,7 @@ sys.stdout = codecs.getwriter('utf8')(sys.stdout)
 sys.stderr = codecs.getwriter('utf8')(sys.stderr)
 
 pkg = 'banshee-gm'
-version = '0.2'
+version = '0.3'
 
 # change to True to not create files or change gm library information
 # will still get all information, do comparisons, and print out what would
@@ -310,6 +310,7 @@ def get_b_playlists(banshee_conn, playlists=[]):
     of track keys as its values.
     '''
 
+    pl_to_get = []
     # see if playlists were provided
     if playlists:
         # make sure they exist
@@ -321,19 +322,25 @@ def get_b_playlists(banshee_conn, playlists=[]):
             if count == 0:
                 logmsg('banshee playlist does not exist: {0}'.format(p_name),
                        True)
+                # need to check smart playlists
             elif count > 1:
                 logmsg('multiple banshee playlists match: {0}'.format(p_name),
                        True)
+            elif count == 1:
+                pl_to_get.append(p_name)
+            else:
+                logmsg('invalid count for playlist {0}: {1}'.format(p_name, count))
+                continue
     else:
         # get all playlists from banshee database
         banshee_c = banshee_conn.cursor()
         banshee_c.execute('select Name from CorePlaylists')
         # put them in a list
-        playlists = [row[0] for row in banshee_c.fetchall()]
+        pl_to_get = [row[0] for row in banshee_c.fetchall()]
 
     # loop through playlists
     b_playlists = {}
-    for p_name in playlists:
+    for p_name in pl_to_get:
         # get cursor for playlist query
         banshee_p_c = banshee_conn.cursor()
         t = (p_name,)
@@ -345,7 +352,7 @@ def get_b_playlists(banshee_conn, playlists=[]):
             join CorePlaylistEntries as e on t.TrackID = e.TrackID
             join CorePlaylists as p on e.PlaylistID = p.PlaylistID
           where p.Name = ?
-          order by e.ViewOrder''', t)
+          order by e.ViewOrder, e.EntryID''', t)
 
         # loop through playlist tracks
         b_playlists[p_name] = []
@@ -516,9 +523,11 @@ def track(api, gm_tracks, b_tracks):
         update = {}
         for (gm_k, gm_v) in gm_tracks[key].iteritems():
             if gm_k == 'rating':
+                # banshee rating overrides any rating in gm
                 update[gm_k] = b_track['rating']
             elif gm_k == 'playCount':
-                update[gm_k] = b_track['playcount']
+                # add play counts together
+                update[gm_k] = b_track['playcount'] + gm_v
             else:
                 update[gm_k] = gm_v
 
@@ -555,6 +564,7 @@ def playlist(api, gm_tracks, b_playlists):
         # create playlist
         if not dryrun:
             playlist_id = api.create_playlist(playlist_name)
+        logmsg('created google music playlist: {0}'.format(playlist_name))
 
         # loop through songs
         p_tracks = []
@@ -577,8 +587,6 @@ def playlist(api, gm_tracks, b_playlists):
         # add tracks to playlist (hopefully order is preserved)
         if not dryrun:
             api.add_songs_to_playlist(playlist_id, p_tracks)
-
-        logmsg('created google music playlist: {0}'.format(playlist_name))
 
     return True
 
