@@ -32,6 +32,7 @@ import re
 import sqlite3
 import sys
 import urllib
+from optparse import OptionParser
 from distutils.dir_util import mkpath
 # https://github.com/simon-weber/Unofficial-Google-Music-API
 from gmusicapi.api import Api
@@ -591,12 +592,34 @@ def main(argv):
     # open log file
     logmsg.log_f = codecs.open(pkg + '.log', mode='w', encoding='utf-8')
 
-    # process command line
-    command = ''
-    if len(argv) > 1:
-        command = argv[1]
-    else:
-        command = 'diff'
+    # process command line options
+    usage = "%prog [OPTIONS]... [COMMAND] [ARGS]..."
+    version_str = "{0} {1}".format(pkg, version)
+    parser = OptionParser(usage=usage, version=version_str)
+    # default banshee database
+    banshee_db_def = os.environ['HOME'] + '/.config/banshee-1/banshee.db'
+    banshee_db_help = "use Banshee database BANSHEE_DB (default {0})".format(banshee_db_def)
+    parser.add_option("-b", "--banshee-db", default=banshee_db_def,
+                      help=banshee_db_help)
+    parser.add_option("-d", "--dry-run", action="store_true", default=False,
+                      help="perform no action, just report what would be done")
+    parser.add_option("-q", "--quiet", action="store_true",
+                      help="do not print status messages")
+    # default minimum rating
+    rating_def = 3
+    rating_help = "only consider Banshee songs with rating >= RATING (default {0})".format(rating_def)
+    parser.add_option("-r", "--rating", type="int", default=rating_def,
+                      help=rating_help)
+
+    (options, args) = parser.parse_args()
+    # set "global"
+    dryrun = options.dry_run
+
+    # determine action
+    command = 'diff'
+    if len(args):
+        command = args[0]
+        args = argv[1:]
 
     # log in to Google Music (gm)
     api = Api() 
@@ -623,19 +646,14 @@ def main(argv):
         gm_tracks = get_gm_library(api)
 
     # connect to banshee database
-    banshee_db = os.environ['HOME'] + '/.config/banshee-1/banshee.db'
-    banshee_conn = sqlite3.connect(banshee_db)
+    banshee_conn = sqlite3.connect(options.banshee_db)
     if not banshee_conn:
-        logmsg('unable to connect to banshee: {0}'.format(banshee_db), True)
+        logmsg('unable to connect to banshee: {0}'.format(options.banshee_db),
+               True)
         return
 
-    # make this a parameter at some point
-    rating = 3
     # get the banshee library
-    b_tracks = get_b_library(banshee_conn, rating)
-
-    # clean up argument list
-    args = argv[2:]
+    b_tracks = get_b_library(banshee_conn, options.rating)
 
     # dispatch
     rv = 0
@@ -666,11 +684,12 @@ def main(argv):
     # close log file
     logmsg.log_f.close
 
-    return rv
+    if rv:
+        sys.exit(0)
+    # else
+    sys.exit(1)
+    # just in case
+    return
 
 if __name__ == '__main__':
     rv = main(sys.argv)
-    if rv:
-        sys.exit(0)
-    else:
-        sys.exit(1)
