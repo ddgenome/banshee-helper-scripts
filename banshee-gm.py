@@ -45,7 +45,7 @@ sys.stdout = codecs.getwriter('utf8')(sys.stdout)
 sys.stderr = codecs.getwriter('utf8')(sys.stderr)
 
 pkg = 'banshee-gm'
-version = '0.3'
+version = '0.4'
 
 # change to True to not create files or change gm library information
 # will still get all information, do comparisons, and print out what would
@@ -60,10 +60,11 @@ def logmsg(msg, error=False):
     """
 
     text = u"{0}: {1}".format(pkg, msg)
-    if error:
-        sys.stderr.write(text + u'\n')
-    else:
-        print text 
+    if not logmsg.quiet:
+        if error:
+            sys.stderr.write(text + u'\n')
+        else:
+            print text 
     logmsg.log_f.write(u"{0}\n".format(msg))
     return
 
@@ -255,7 +256,7 @@ def get_b_library(banshee_conn, rating):
     tracks = 0
     for row in banshee_c:
         # increment row counter
-        ++rows
+        rows += 1
 
         # would be nice if you could do slice assignment with dictionary
         t = {}
@@ -276,7 +277,7 @@ def get_b_library(banshee_conn, rating):
             continue
 
         # looks like a real music track
-        ++tracks
+        tracks += 1
 
         # create dictionary key
         key = make_track_key(t['n'], t['title'], t['album'], t['artist'])
@@ -523,14 +524,18 @@ def track(api, gm_tracks, b_tracks):
         # create updated track dictionary
         update = {}
         for (gm_k, gm_v) in gm_tracks[key].iteritems():
-            if gm_k == 'rating':
+            # just setting what needs to be changed seems to work
+            if gm_k == 'id':
+                # set id
+                update[gm_k] = gm_v
+            elif gm_k == 'rating':
                 # banshee rating overrides any rating in gm
                 update[gm_k] = b_track['rating']
             elif gm_k == 'playCount':
                 # add play counts together
                 update[gm_k] = b_track['playcount'] + gm_v
-            else:
-                update[gm_k] = gm_v
+            #else:
+            #    update[gm_k] = gm_v
 
         updates.append(update)
 
@@ -597,9 +602,6 @@ def main(argv):
     :param argv: list of command line arguments
     '''
 
-    # open log file
-    logmsg.log_f = codecs.open(pkg + '.log', mode='w', encoding='utf-8')
-
     # process command line options
     usage = "%prog [OPTIONS]... [COMMAND] [ARGS]..."
     version_str = "{0} {1}".format(pkg, version)
@@ -620,8 +622,13 @@ def main(argv):
                       help=rating_help)
 
     (options, args) = parser.parse_args()
-    # set "global"
+    # set "globals"
+    global dryrun
     dryrun = options.dry_run
+    logmsg.quiet = options.quiet
+
+    # open log file
+    logmsg.log_f = codecs.open(pkg + '.log', mode='w', encoding='utf-8')
 
     # determine action
     command = 'diff'
@@ -700,4 +707,4 @@ def main(argv):
     return
 
 if __name__ == '__main__':
-    rv = main(sys.argv)
+    main(sys.argv)
