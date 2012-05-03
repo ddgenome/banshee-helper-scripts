@@ -8,9 +8,7 @@ module and then write a tool to sync Banshee metadata with Google Music
 README                    this file
 banshee-db-sync.pl        set playcount information from old library to new one
 banshee-fs-diff.pl        consistency check between database and file system
-banshee-gm-sync.pl        create hard links in separate directory structure for
-                          tracks of rating three or greater to use as gm sync
-banshee-gm.py             diff banshee and google music libraries
+banshee-gm.py             push banshee information to google music
 banshee-playlist.pl       extract playlists from banshee library
 banshee-recent.pl         list recently played or added banshee tracks
 banshee-uri.pl            correct uri of tracks (one off script)
