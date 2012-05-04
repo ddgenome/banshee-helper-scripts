@@ -102,6 +102,7 @@ def make_track_key(n, title, album, artist):
     re_mspace = re.compile('\s+')
     re_prespace = re.compile('^\s+')
     re_postspace = re.compile('\s+$')
+    re_the = re.compile('^the\s+', re.I)
 
     # create dictionary key
     key_items = []
@@ -118,6 +119,8 @@ def make_track_key(n, title, album, artist):
         item = re_mspace.sub(' ', item)
         item = re_prespace.sub('', item)
         item = re_postspace.sub('', item)
+        # remove leading the
+        item = re_the.sub('', item)
 
         # add to list
         key_items.append(item)
@@ -634,7 +637,8 @@ def main(argv):
     command = 'diff'
     if len(args):
         command = args[0]
-        args = argv[1:]
+        # save the rest
+        args = args[1:]
 
     # log in to Google Music (gm)
     api = Api() 
