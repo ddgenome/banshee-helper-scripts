@@ -1,9 +1,10 @@
 This repo contains a set of scripts I use to help me manage my Banshee (b)
-music library, including syncing with Google Play Music (gm).
+music library, including pushing to Google Play Music (gm).
 
 Long term, the plan is to migrate all the Banshee stuff into a Python
-module and then write a tool to sync Banshee metadata with Google Music
-(leaving the file upload and download to Google Music Manager).
+module and then write a tool to push Banshee metadata to Google Music
+(leaving the file upload and download to Google Music Manager), probably
+via https://github.com/simon-weber/Mirror-MediaMonkey-to-Google-Music.
 
 README                    this file
 banshee-db-sync.pl        set playcount information from old library to new one
