@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # perform various push operations from banshee to Google Play Music
 
-# Copyright (c) 2012, Simon Weber
+# Copyright (C) 2012 David Dooling
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,7 @@ sys.stdout = codecs.getwriter('utf8')(sys.stdout)
 sys.stderr = codecs.getwriter('utf8')(sys.stderr)
 
 pkg = 'banshee-gm'
-version = '0.5'
+__version__ = '0.6'
 
 # change to True to not create files or change gm library information
 # will still get all information, do comparisons, and print out what would
@@ -129,6 +129,28 @@ def make_track_key(n, title, album, artist):
     key = '|'.join(key_items)
 
     return key
+
+def uri_to_path(uri):
+    '''Convert Banshee URI to file system path.
+
+    :param uri: Banshee URI to convert to path
+
+    The file system path is returned as a unicode string.  If the URI
+    does not point to a local file, an empty string is returned.  If
+    an error occurs, False is returned.
+    '''
+
+    # make sure it is local
+    if not re.match('^file://', uri):
+        logmsg('not a local file: {0}'.format(uri), True)
+        return ''
+
+    # unescape uri (avoid unicode confusion by forcing ascii)
+    src_uri = urllib.unquote(uri.encode('ascii'))
+    # remove protocol (file://)
+    src = src_uri[7:]
+
+    return src
 
 def gm_track_to_key(gm_track):
     '''Convert a Google Music track dictionary to a dictionary key.
@@ -534,6 +556,50 @@ def sync(b_tracks):
     # create directory suitable for google music manager
     return link_tracks(b_uri)
 
+def fs(b_tracks):
+    '''Report discrepancies between Banshee database and file system.
+
+    :param b_tracks: dictionary of Banshee tracks
+    '''
+
+    # loop through banshee tracks
+    b_missing = {}
+    b_valid = {}
+    for (key, t) in b_tracks.iteritems():
+        uri = t['uri']
+        t_path = uri_to_path(uri)
+        if not os.path.exists(t_path):
+            logmsg(u'track does not exist: {0}, {1}'.format(uri, t_path), True)
+            b_missing[key] = uri
+            continue
+        # else store for later
+        t_path_real = os.path.realpath(t_path)
+        b_valid[t_path_real] = uri
+
+    # walk through the file system
+    fs_extra = {}
+    b_root = os.environ['HOME'] + '/Music'
+    b_root_real = os.path.realpath(b_root)
+    re_music = re.compile('\.(flac|m4a|mp3|ogg)$', re.I)
+    for (root, dirs, files) in os.walk(b_root_real):
+        # just interested in the files
+        for f in files:
+            # skip non-music files
+            if not re_music.search(f):
+                continue
+            # create full path
+            path = os.path.join(root, f)
+            # make sure it does not belong
+            if path not in b_valid:
+                logmsg(u'extra track: {0}'.format(path), True)
+                fs_extra[path] = 1
+
+    # write the missing and extra tracks
+    write_keys('b-missing.fs', b_missing)
+    write_keys('b-extra.fs', fs_extra)
+
+    return True
+
 def track(api, gm_tracks, b_tracks, elements):
     '''Update Google Music track metadata using information from Banshee database.
 
@@ -691,7 +757,7 @@ def main(argv):
 
     # process command line options
     usage = "%prog [OPTIONS]... [COMMAND] [ARGS]..."
-    version_str = "{0} {1}".format(pkg, version)
+    version_str = "{0} {1}".format(pkg, __version__)
     parser = OptionParser(usage=usage, version=version_str)
     # default banshee database
     banshee_db_def = os.environ['HOME'] + '/.config/banshee-1/banshee.db'
@@ -728,8 +794,8 @@ def main(argv):
     api = Api() 
 
     gm_tracks = {}
-    # sync does not need connection to gm
-    if command != 'sync':
+    # sync and fs do not need connection to gm
+    if command != 'sync' and command != 'fs':
         logged_in = False
         attempts = 0
         while not logged_in and attempts < 3:
@@ -766,6 +832,9 @@ def main(argv):
     elif command == 'sync':
         # create all files with sufficient rating
         rv = sync(b_tracks)
+    elif command == 'fs':
+        # check banshee database and file system for consistency
+        rv = fs(b_tracks)
     elif command == 'track':
         # update track metadata
         rv = track(api, gm_tracks, b_tracks, args)
