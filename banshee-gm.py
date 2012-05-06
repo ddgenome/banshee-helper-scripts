@@ -507,7 +507,6 @@ def diff(gm_tracks, b_tracks):
     no_gm = {}
     for t_key in b_tracks:
         if t_key not in gm_tracks:
-            #print 'no gm:', t_key
             no_gm[t_key] = b_tracks[t_key]['uri']
 
     logmsg("gm missing tracks {0}".format(len(no_gm)))
@@ -535,8 +534,8 @@ def sync(b_tracks):
     # create directory suitable for google music manager
     return link_tracks(b_uri)
 
-def track(api, gm_tracks, b_tracks, *elements):
-    '''Update Google Music track metadata using information from Banshee database.  **NOT FULLY IMPLEMENTED**
+def track(api, gm_tracks, b_tracks, elements):
+    '''Update Google Music track metadata using information from Banshee database.
 
     :param api: Google Music API connection
     :param gm_tracks: Google Music track dictionary
@@ -544,7 +543,7 @@ def track(api, gm_tracks, b_tracks, *elements):
     :param elements: list of track elements to update
 
     This method returns True if successful.  The possible elements it
-    can make are:
+    can update are:
 
     * rating
     * albumArtist
@@ -552,15 +551,51 @@ def track(api, gm_tracks, b_tracks, *elements):
     * disc
     * genre
     * playCount
-    * playCountAdd: update with sum of Banshee and Google Music play counts
     * totalDiscs
     * totalTracks
     * year
 
     Any update element can have ":f" appended to force it to overwrite
     existing information.  Otherwise, it will only update empty
-    fields.
+    fields.  The playCount element can have ":sum" appended to
+    indicate the play counts from Banshee and Google Music should be
+    added; implies force.
     '''
+
+    # see what we should do
+    allowed_k = ['rating', 'albumArtist', 'composer', 'disc', 'genre',
+                 'playCount', 'totalDiscs', 'totalTracks', 'year']
+    update_k = {}
+    re_colon = re.compile(':')
+    for e in elements:
+        e_parse = re_colon.split(e, 1)
+        k = e_parse[0]
+        d = False
+
+        # see if key can be updated
+        if k not in allowed_k:
+            logmsg('metadata element not allowed to be updated: {0}'.format(k),
+                   True)
+            continue
+
+        # validate element directive (if present)
+        if len(e_parse) > 1:
+            d = e_parse[1]
+            if k == 'playCount' and d == 'sum':
+                pass
+            elif d == 'f':
+                pass
+            else:
+                logmsg('unknown track element directive: {0}'.format(d), True)
+                continue
+
+        update_k[k] = d
+
+    # see if any elements passed muster
+    if not update_k:
+        logmsg('no valid metadata elements provided, valid: {0}'.format(allowed_k),
+               True)
+        return False
 
     # loop through banshee tracks
     updates = []
@@ -572,19 +607,22 @@ def track(api, gm_tracks, b_tracks, *elements):
 
         # create updated track dictionary
         update = {}
+        # just setting what needs to be changed seems to work
         for (gm_k, gm_v) in gm_tracks[key].iteritems():
-            # just setting what needs to be changed seems to work
+            # make sure id is set
             if gm_k == 'id':
-                # set id
                 update[gm_k] = gm_v
-            elif gm_k == 'rating':
-                # banshee rating overrides any rating in gm
-                update[gm_k] = b_track['rating']
-            elif gm_k == 'playCount':
-                # add play counts together
-                update[gm_k] = b_track['playcount'] + gm_v
-            #else:
-            #    update[gm_k] = gm_v
+            # see if this element is to be updated
+            elif gm_k in update_k:
+                # see if value is already set
+                if gm_v and not update_k[gm_k]:
+                    # not forcing update
+                    continue
+                # else, check for play count summing
+                if gm_k == 'playCount' and update_k[gm_k] == 'sum':
+                    update[gm_k] = b_track[gm_k] + gm_v
+                else:
+                    update[gm_k] = b_track[gm_k]
 
         updates.append(update)
 
