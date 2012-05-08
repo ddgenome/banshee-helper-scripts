@@ -687,7 +687,8 @@ def track(api, gm_tracks, b_tracks, elements):
                 # else, check for play count summing
                 if gm_k == 'playCount' and update_k[gm_k] == 'sum':
                     update[gm_k] = b_track[gm_k] + gm_v
-                else:
+                # make sure element of b_track contains something
+                elif b_track[gm_k]:
                     update[gm_k] = b_track[gm_k]
 
         updates.append(update)
