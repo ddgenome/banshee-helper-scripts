@@ -264,7 +264,8 @@ def get_b_library(banshee_conn, rating):
     Dictionary keys are the standard track keys and the values are a
     song dictionary modeled after that returned by
     gmusicapi.api.get_all_songs.  Only local music files (file://
-    URIs) are considered.  The dictionary elements are:
+    URIs) that do not have the genre "Podcast" are considered.  The
+    dictionary elements are:
 
     * id: unique identifier (integer)
     * uri: URI of song file
@@ -287,14 +288,15 @@ def get_b_library(banshee_conn, rating):
     banshee_c = banshee_conn.cursor()
     # get all songs with a three or better rating
     t = (rating,)
-    banshee_c.execute('''
+    banshee_c.execute("""
       select t.TrackID, t.Uri, t.Title, t.TrackNumber, t.Duration, t.Disc,
         t.Rating, t.PlayCount, t.Genre, t.DiscCount, t.TrackCount, t.Year,
         a.Name, t.Composer, l.Title, l.ArtistName
       from CoreTracks as t
         join CoreArtists as a on t.ArtistID = a.ArtistID
         join CoreAlbums as l on t.AlbumID = l.AlbumID
-      where t.Rating >= ?''', t)
+      where t.Rating >= ?
+        and Genre <> 'Podcast'""", t)
 
     # compile regular expressions
     re_prefix = re.compile('^file://' + os.environ['HOME'] + '/Music')
