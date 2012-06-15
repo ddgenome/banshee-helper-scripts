@@ -63,7 +63,7 @@ print("$pkg: checked $tracks tracks, $missing missing\n");
 # find files not in database
 my ($files, $extra) = (0, 0);
 # account for symbolic links
-my $music_path = "$ENV{HOME}/Music";
+my $music_path = "$ENV{HOME}/Music/Banshee";
 my $music_abs_path = Cwd::abs_path($music_path);
 # loop through files
 find(\&check_track, $music_abs_path);
