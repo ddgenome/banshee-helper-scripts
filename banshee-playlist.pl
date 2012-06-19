@@ -69,14 +69,14 @@ sub get_list {
     # prep query
     my $track_q = q(
       select t.Uri, e.ViewOrder, a.Name, t.Title, t.TrackNumber,
-        l.Title, t.Year, t.Genre
-      from CoreTracks as t
-        join CoreArtists as a on t.ArtistID = a.ArtistID
-        join CoreAlbums as l on t.AlbumID = l.AlbumID
-        join CorePlaylistEntries as e on t.TrackID = e.TrackID
-        join CorePlaylists as p on e.PlaylistID = p.PlaylistID
+        l.Title, t.Year, t.Genre, t.Duration/1000
+      from CorePlaylists as p
+        join CorePlaylistEntries as e on e.PlaylistID = p.PlaylistID
+        join CoreTracks as t on t.TrackID = e.TrackID
+        join CoreArtists as a on a.ArtistID = t.ArtistID
+        join CoreAlbums as l on l.AlbumID = t.AlbumID
       where p.Name = ?
-      order by e.ViewOrder
+      order by e.ViewOrder, e.EntryID
     );
     my $track_s = $dbh->prepare($track_q);
     # execute query
@@ -90,7 +90,7 @@ sub get_list {
     # get tracks and start loop
     while (my $row = $track_s->fetchrow_arrayref) {
         my (%track);
-        @track{qw(uri order artist title n album year genre)} = @$row;
+        @track{qw(uri order artist title n album year genre duration)} = @$row;
         my $path = $track{uri};
         $path =~ s,^file://,,;
         $path = uri_unescape($path);
@@ -106,7 +106,7 @@ sub get_list {
                 $path = $rv;
             }
         }
-        $m3u->print("#EXTINF:$track{order},$track{artist} - $track{title}\n");
+        $m3u->print("#EXTINF:$track{duration},$track{artist} - $track{title}\n");
         $m3u->print("$path\n");
     }
     $m3u->close;
