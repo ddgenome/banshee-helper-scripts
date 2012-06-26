@@ -9,12 +9,12 @@ use DBI;
 use Getopt::Long;
 
 my $pkg = 'banshee-uri';
-my $version = '0.2';
+my $version = '0.3';
 
 my ($check);
-unless (GetOptions(help => sub { print "$pkg [OPTIONS]...\n" },
+unless (GetOptions(help => sub { print "$pkg [OPTIONS]...\n"; exit(0) },
                    check => \$check,
-                   version => sub { print "$pkg $version\n" }
+                   version => sub { print "$pkg $version\n"; exit(0) }
                   ))
 {
     warn("Try `$pkg --help' for more information.\n");
@@ -33,6 +33,7 @@ if (!defined($dbh)) {
 
 # prepare select query
 my $uri_prefix = "file://$ENV{HOME}/Music";
+my $banshee_prefix = "$uri_prefix/Banshee";
 my $track_q = qq(
   select t.TrackID, t.Uri
   from CoreTracks as t
@@ -55,9 +56,14 @@ while (my $row = $track_s->fetchrow_arrayref) {
     ++$tracks;
     my ($id, $old_uri) = @$row;
 
+    # make sure it is not already fixed
+    if ($old_uri =~ m/^$banshee_prefix/) {
+        next; # while $row
+    }
+
     # fix uri
     my $uri = $old_uri;
-    if ($uri =~ s/^$uri_prefix/$uri_prefix\/Banshee/) {
+    if ($uri =~ s/^$uri_prefix/$banshee_prefix/) {
         ++$updates;
     }
     else {
