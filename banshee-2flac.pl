@@ -112,6 +112,8 @@ while (my $row = $track_s->fetchrow_arrayref) {
     # set flac uri
     my $flac_uri = "file://$flac";
     $flac_uri =~ s/ /%20/g;
+    $flac_uri =~ s/\[/%5B/g;
+    $flac_uri =~ s/\]/%5D/g;
 
     # update track
     ++$updates;
