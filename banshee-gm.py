@@ -31,6 +31,7 @@ import os
 import re
 import sqlite3
 import sys
+import time
 import urllib
 from optparse import OptionParser
 from distutils.dir_util import mkpath
@@ -230,28 +231,32 @@ def get_gm_playlists(api):
     '''
 
     # get user playlists
-    playlist_ids = api.get_all_playlist_ids(auto=False, instant=False,
+    playlist_ids = api.get_all_playlist_ids(auto=True, instant=True,
                                             user=True, always_id_lists=True)
-    # loop through names
     gm_playlists = {}
-    for (name, ids) in playlist_ids['user'].iteritems():
-        # reject duplicates
-        if len(ids) > 1:
-            logmsg('multiple google music playlists with same name: {0}'.format(
-                    name), True)
-            continue
+    # loop through playlist types
+    for (pl_type, playlists) in playlist_ids.iteritems():
+        for (name, ids) in playlists.iteritems():
+            pl_id = ids
+            # ids might be an array
+            if isinstance(ids, list):
+                # reject duplicates
+                if len(ids) > 1:
+                    logmsg('multiple google music playlists with same name: {0}'.format(name), True)
+                    continue
+                pl_id = ids[0]
 
-        # get tracks
-        p_tracks = api.get_playlist_songs(ids[0])
+            # get tracks
+            p_tracks = api.get_playlist_songs(pl_id)
 
-        # initialize list
-        gm_playlists[name] = []
+            # initialize list
+            gm_playlists[name] = []
 
-        # loop through songs
-        for t in p_tracks:
-            # get track key
-            key = gm_track_to_key(t)
-            gm_playlists[name].append(key)
+            # loop through songs
+            for t in p_tracks:
+                # get track key
+                key = gm_track_to_key(t)
+                gm_playlists[name].append(key)
 
     return gm_playlists
 
@@ -720,35 +725,57 @@ def playlist(api, gm_tracks, b_playlists):
     # loop through banshee playlists
     for (playlist_name, tracks) in b_playlists.iteritems():
         if playlist_name in gm_playlists:
-            logmsg('banshee playlist already exists as google music playlist: {0}'.format(playlist_name), True)
+            logmsg('banshee playlist already exists as google music playlist: '
+                   + '{0}'.format(playlist_name), True)
             continue
 
-        # create playlist
-        if not dryrun:
-            playlist_id = api.create_playlist(playlist_name)
-        logmsg('created google music playlist: {0}'.format(playlist_name))
+        # handle lists with more than 1000 songs (Google Music does not allow)
+        t_count = 0
+        pl_track_max = 1000
+        while t_count < len(tracks):
+            # set playlist name
+            pl_name = playlist_name
+            if t_count > 0:
+                pl_name = playlist_name + str(int(t_count / pl_track_max))
+            # create playlist
+            if not dryrun:
+                playlist_id = api.create_playlist(pl_name)
+                logmsg('created google music playlist: {0}'.format(pl_name))
 
-        # loop through songs
-        p_tracks = []
-        for t_key in tracks:
-            # make sure song exists in gm_tracks
-            if t_key not in gm_tracks:
-                logmsg('playlist track not in google music library: {0}, {1}'.format(playlist_name, t_key), True)
-                continue
+            # loop through songs
+            p_tracks = []
+            while t_count < len(tracks):
+                t_key = tracks[t_count]
+                # count all the tracks
+                t_count += 1
 
-            # get gm track id
-            track_id = gm_tracks[t_key]['id']
-            if not track_id:
-                logmsg('google music track has no id: {0}, {1}'.format(
-                       playlist_name, t_key), True)
-                continue
+                # make sure song exists in gm_tracks
+                if t_key not in gm_tracks:
+                    logmsg('playlist track not in google music library: '
+                           + '{0}, {1}'.format(pl_name, t_key), True)
+                    continue
 
-            p_tracks.append(track_id)
-            logmsg('added track to {0}: {1}'.format(playlist_name, t_key))
+                # get gm track id
+                if 'id' not in gm_tracks:
+                    logmsg('google music track has no id: {0}, {1}'.format(
+                            pl_name, t_key), True)
+                    continue
+                track_id = gm_tracks[t_key]['id']
 
-        # add tracks to playlist (hopefully order is preserved)
-        if not dryrun:
-            api.add_songs_to_playlist(playlist_id, p_tracks)
+                p_tracks.append(track_id)
+                logmsg('added track to {0}: {1}'.format(pl_name, t_key))
+
+                # see if we need to close this playlist and start a new one
+                if len(p_tracks) == pl_track_max:
+                    # close out this playlist
+                    break
+
+            # add tracks to playlist (hopefully order is preserved)
+            if not dryrun:
+                api.add_songs_to_playlist(playlist_id, p_tracks)
+                # wait a bit
+                time.sleep(2)
+                logmsg('called add_songs_to_playlist for {0}'.format(pl_name))
 
     return True
 
