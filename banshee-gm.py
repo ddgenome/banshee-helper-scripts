@@ -426,7 +426,7 @@ def link_tracks(tracks, up=False):
     """Create directory structure and hard link tracks in Banshee that need to be in Google Music.
 
     :param tracks: dictionary of track key,uri values
-    :param up: if true, create links in ~/GoogleMusicUp rather than ~/GoogleMusic
+    :param up: if true, create links in ~/Music/GoogleMusicUploads rather than ~/Music/GoogleMusic
 
     This method with create links for files in the tracks dictionary and
     remove links for files not in it.  Return True if successful.
@@ -434,10 +434,10 @@ def link_tracks(tracks, up=False):
 
     # set root paths
     home = os.environ['HOME']
-    src_root = home + '/Music'
-    target_root =  home + '/GoogleMusic'
+    src_root = home + '/Music/Banshee'
+    target_root =  home + '/Music/GoogleMusic'
     if up:
-        target_root = target_root + 'Up'
+        target_root = target_root + 'Uploads'
 
     # prepare regex
     local_uri_re = re.compile('^file://')
@@ -447,15 +447,11 @@ def link_tracks(tracks, up=False):
     valid_links = {}
     # iterate over items that need to be created
     for (key, uri) in tracks.iteritems():
-        # make sure it is local
-        if not local_uri_re.match(uri):
-            logmsg('not a local file: {0}'.format(uri), True)
+        src = uri_to_path(uri)
+        if not src:
+            # uri_to_path will report the problem
             continue
 
-        # unescape uri (avoid unicode confusion by forcing ascii)
-        src_uri = urllib.unquote(uri.encode('ascii'))
-        # remove protocol (file://)
-        src = src_uri[7:]
         # initiate link path
         link = src_root_re.sub(target_root, src)
         # determine real paths (avoid sym link issues)
@@ -470,8 +466,8 @@ def link_tracks(tracks, up=False):
 
         # make sure source exists
         if not os.path.exists(src_real):
-            logmsg(u'original file does not exist: {0}, {1}, {2}'.format(uri,
-                   src_uri, src), True)
+            logmsg(u'original file does not exist: {0}, {1}'.format(uri, src),
+                   True)
             continue
 
         # create path to link
@@ -580,17 +576,19 @@ def fs(b_tracks):
 
     # walk through the file system
     fs_extra = {}
-    b_root = os.environ['HOME'] + '/Music'
+    fs_skipped = {}
+    b_root = os.environ['HOME'] + '/Music/Banshee'
     b_root_real = os.path.realpath(b_root)
     re_music = re.compile('\.(flac|m4a|mp3|ogg)$', re.I)
     for (root, dirs, files) in os.walk(b_root_real):
         # just interested in the files
         for f in files:
-            # skip non-music files
-            if not re_music.search(f):
-                continue
             # create full path
             path = os.path.join(root, f)
+            # skip non-music files
+            if not re_music.search(f):
+                fs_skipped[path] = 1
+                continue
             # make sure it does not belong
             if path not in b_valid:
                 logmsg(u'extra track: {0}'.format(path), True)
@@ -599,6 +597,8 @@ def fs(b_tracks):
     # write the missing and extra tracks
     write_keys('b-missing.fs', b_missing)
     write_keys('b-extra.fs', fs_extra)
+    write_keys('b-skipped.fs', fs_skipped)
+    write_keys('b-valid.fs', b_valid)
 
     return True
 
