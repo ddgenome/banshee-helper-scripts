@@ -861,6 +861,8 @@ def delete(api, gm_tracks, b_playlists):
                 continue
 
             # delete the track
+            # !!! delete tracks one at a time to avoid making big changes and
+            # crippling google music sync !!!
             if not dryrun:
                 api.delete_songs(track_id)
                 # wait a bit because Google Music does not like big changes
