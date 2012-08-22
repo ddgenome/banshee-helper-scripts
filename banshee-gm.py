@@ -806,6 +806,66 @@ def validate(gm_tracks):
 
     return True
 
+def delete(api, gm_tracks, b_playlists):
+    '''Delete tracks on Banshee playlists from Google Music.
+
+    :param api: Google Music API connection
+    :param gm_tracks: dictionary of Google Music tracks
+    :param b_playlists: dictionary of Banshee playlists to upload
+
+    This method will only remove tracks that do not have the storeID
+    element, indicating they were free/purchased.
+    '''
+
+    # keep track of what was done
+    missing_tracks = {}
+    store_tracks = {}
+    deleted_tracks = {}
+
+    # delete some tracks regardless
+    re_not_store = re.compile('daytrotter|big orange studios')
+
+    # loop through the playlists
+    for (pl_name, tracks) in b_playlists.iteritems():
+        # loop through the tracks
+        for t_key in tracks:
+            # make sure song exists in gm_tracks
+            if t_key not in gm_tracks:
+                logmsg('track not in google music library: {0}'.format(t_key),
+                       True)
+                missing_tracks[t_key] = 1
+                continue
+
+            # get gm track id
+            if 'id' not in gm_tracks[t_key]:
+                logmsg('google music track has no id: {0}'.format(t_key), True)
+                continue
+            track_id = gm_tracks[t_key]['id']
+
+            # check to see if it is free/purchased
+            if 'storeId' in gm_tracks[t_key] and not re_not_store.search(t_key):
+                # some tracks with storeId are not purchased
+                # (perhaps planning for a future ``match'' capability?)
+                store_id = gm_tracks[t_key]['storeId']
+                logmsg('google music track was free/purchased: {0} {1}'.format(
+                        t_key, store_id), True)
+                store_tracks[t_key] = store_id
+                continue
+
+            # delete the track
+            if not dryrun:
+                api.delete_songs(track_id)
+                # wait a bit because Google Music does not like big changes
+                time.sleep(1)
+            logmsg('deleted track: {0} {1}'.format(t_key, track_id))
+            deleted_tracks[t_key] = track_id
+
+    write_keys('gm.missing', missing_tracks)
+    write_keys('gm.deleted', deleted_tracks)
+    write_keys('gm.store', store_tracks)
+
+    return True
+
 def main(argv):
     '''Farm out work to task-based methods.
 
@@ -903,6 +963,11 @@ def main(argv):
     elif command == 'validate':
         # make sure the gm track metadata does not have bad characters
         rv = validate(gm_tracks)
+    elif command == 'delete':
+        # get banshee playlists
+        b_playlists = get_b_playlists(banshee_conn, args)
+        # delete tracks on banshee playlists from google music
+        rv = delete(api, gm_tracks, b_playlists)
     else:
         logmsg('unknown command: {0}'.format(command), True)
         return
