@@ -14,9 +14,11 @@ my $pkg = 'banshee-2flac';
 my $version = '0.1';
 
 my ($check, $ignore_case);
+my %new = (ext => '.flac', mime => 'tablib/flac');
 if (!&GetOptions(help => sub { &pod2usage(-exitval => 0) },
                  check => \$check,
                  'ignore-case' => \$ignore_case,
+                 mp3 => sub { %new = (ext => '.mp3', mime => 'tablib/mp3') },
                  version => sub { print "$pkg $version\n"; exit(0) }))
 {
     warn("Try ``$pkg --help'' for more information.\n");
@@ -30,7 +32,6 @@ if (@ARGV < 2) {
     exit(1);
 }
 my ($artist, $album, $track) = @ARGV;
-my $flac_mime = 'taglib/flac';
 
 # connect to database
 my $bdb = "$ENV{HOME}/.config/banshee-1/banshee.db";
@@ -52,7 +53,7 @@ my $track_q = qq(
     and l.Title = ?
     and t.MimeType != ?
 );
-my @track_args = ($artist, $album, $flac_mime);
+my @track_args = ($artist, $album, $new{mime});
 if ($track) {
     $track_q .= "\n    and TrackNumber = ?";
     push(@track_args, $track);
@@ -86,12 +87,13 @@ while (my $row = $track_s->fetchrow_arrayref) {
     my $ext = $mime;
     $ext =~ s,^taglib/,,;
     my $flac = $path;
-    $flac =~ s/\.$ext$/.flac/;
+    $flac =~ s/\.$ext$/$new{ext}/;
     if (!-f $flac) {
         if ($ignore_case) {
             # try a case insensitive match (need to have a glob character)
             my $flac_glob = $flac;
-            $flac_glob =~ s/\.flac$/.fla[c]/;
+            my $last_char = chop($flac_glob);
+            $flac_glob = $flac_glob . '[' . $last_char . ']';
             my ($match) = bsd_glob($flac_glob, GLOB_NOCASE);
             if (!$match) {
                 warn("$pkg: no flac file matched: $flac\n");
@@ -122,7 +124,7 @@ while (my $row = $track_s->fetchrow_arrayref) {
         next;
     }
     # else
-    $update_s->execute($flac_uri, $flac_mime, $flac_size, $id);
+    $update_s->execute($flac_uri, $new{mime}, $flac_size, $id);
 }
 print("$pkg: processed $tracks tracks, updated $updates tracks\n");
 
@@ -172,6 +174,10 @@ Display a brief description and listing of all available options.
 =item -i, --ignore-case
 
 Ignore case when attempting to match the original and FLAC file names.
+
+=item -m, --mp3
+
+Convert to MP3 rather than FLAC.
 
 =item -v, --version
 
