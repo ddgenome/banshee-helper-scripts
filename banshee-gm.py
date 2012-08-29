@@ -900,7 +900,15 @@ def main(argv):
     '''
 
     # process command line options
-    usage = "%prog [OPTIONS]... [COMMAND] [ARGS]..."
+    usage = """%prog [OPTIONS]... [COMMAND] [ARGS]...
+       %prog [OPTIONS]... diff
+       %prog [OPTIONS]... sync
+       %prog [OPTIONS]... fs (not working)
+       %prog [OPTIONS]... track UPDATE_KEYS[...]
+       %prog [OPTIONS]... playlist [PLAYLIST]...
+       %prog [OPTIONS]... delete [PLAYLIST]...
+       %prog [OPTIONS]... validate
+       %prog [OPTIONS]... dump TRACK_KEY[...]"""
     version_str = "{0} {1}".format(pkg, __version__)
     parser = OptionParser(usage=usage, version=version_str)
     # default banshee database
