@@ -688,23 +688,32 @@ def track(api, gm_tracks, b_tracks, elements):
 
         # create updated track dictionary
         update = {}
-        # just setting what needs to be changed seems to work
+        no_update = True
+        # copy unchanged elements
         for (gm_k, gm_v) in gm_tracks[key].iteritems():
-            # make sure id is set
-            if gm_k == 'id':
-                update[gm_k] = gm_v
+            # by default, make no change
+            update[gm_k] = gm_v
             # see if this element is to be updated
-            elif gm_k in update_k:
+            if gm_k in update_k:
+                # make sure element of b_track contains something
+                if not b_track[gm_k]:
+                    continue
                 # see if value is already set
                 if gm_v and not update_k[gm_k]:
-                    # not forcing update
+                    # not forcing
                     continue
                 # else, check for play count summing
                 if gm_k == 'playCount' and update_k[gm_k] == 'sum':
                     update[gm_k] = b_track[gm_k] + gm_v
                 # make sure element of b_track contains something
-                elif b_track[gm_k]:
+                else:
                     update[gm_k] = b_track[gm_k]
+                # record that an update occurred
+                no_update = False
+
+        # see if an update was recorded
+        if no_update:
+            continue
 
         # update google music track metadata
         # !!! update tracks one at a time to avoid making big changes and
@@ -783,7 +792,7 @@ def playlist(api, gm_tracks, b_playlists):
             if not dryrun:
                 api.add_songs_to_playlist(playlist_id, p_tracks)
                 logmsg('called add_songs_to_playlist for {0}'.format(pl_name))
-                # wait a bit
+                # wait a bit to avoid appearnce of denial of service
                 time.sleep(2)
 
     return True
@@ -866,7 +875,7 @@ def delete(api, gm_tracks, b_playlists):
             # crippling google music sync !!!
             if not dryrun:
                 api.delete_songs(track_id)
-                # wait a bit because Google Music does not like big changes
+                # wait a bit to avoid appearance of denial of service
                 time.sleep(2)
             logmsg('deleted track: {0} {1}'.format(t_key, track_id))
             deleted_tracks[t_key] = track_id
