@@ -11,14 +11,15 @@ use Pod::Usage;
 use URI::Escape;
 
 my $pkg = 'banshee-2flac';
-my $version = '0.1';
+my $version = '0.2';
 
-my ($check, $ignore_case);
+my ($check, $ignore_case, $verbose);
 my %new = (ext => '.flac', mime => 'tablib/flac');
 if (!&GetOptions(help => sub { &pod2usage(-exitval => 0) },
                  check => \$check,
                  'ignore-case' => \$ignore_case,
                  mp3 => sub { %new = (ext => '.mp3', mime => 'tablib/mp3') },
+                 verbose => \$verbose,
                  version => sub { print "$pkg $version\n"; exit(0) }))
 {
     warn("Try ``$pkg --help'' for more information.\n");
@@ -120,7 +121,7 @@ while (my $row = $track_s->fetchrow_arrayref) {
     # update track
     ++$updates;
     if ($check) {
-        print("$pkg: $id: $flac_size\n  $uri\n  $flac_uri\n");
+        print("$pkg: $id: $flac_size\n  $uri\n  $flac_uri\n") if $verbose;
         next;
     }
     # else
