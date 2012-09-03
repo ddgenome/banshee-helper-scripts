@@ -232,8 +232,8 @@ def get_gm_playlists(api):
     '''
 
     # get user playlists
-    playlist_ids = api.get_all_playlist_ids(auto=True, instant=True,
-                                            user=True, always_id_lists=True)
+    playlist_ids = api.get_all_playlist_ids(auto=True, user=True,
+                                            always_id_lists=True)
     gm_playlists = {}
     # loop through playlist types
     for (pl_type, playlists) in playlist_ids.iteritems():
@@ -774,7 +774,7 @@ def playlist(api, gm_tracks, b_playlists):
                     continue
 
                 # get gm track id
-                if 'id' not in gm_tracks:
+                if 'id' not in gm_tracks[t_key]:
                     logmsg('google music track has no id: {0}, {1}'.format(
                             pl_name, t_key), True)
                     continue
