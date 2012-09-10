@@ -14,11 +14,11 @@ my $pkg = 'banshee-2flac';
 my $version = '0.2';
 
 my ($check, $ignore_case, $verbose);
-my %new = (ext => '.flac', mime => 'tablib/flac');
+my %new = (ext => '.flac', mime => 'taglib/flac');
 if (!&GetOptions(help => sub { &pod2usage(-exitval => 0) },
                  check => \$check,
                  'ignore-case' => \$ignore_case,
-                 mp3 => sub { %new = (ext => '.mp3', mime => 'tablib/mp3') },
+                 mp3 => sub { %new = (ext => '.mp3', mime => 'taglib/mp3') },
                  verbose => \$verbose,
                  version => sub { print "$pkg $version\n"; exit(0) }))
 {
