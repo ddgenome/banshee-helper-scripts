@@ -756,12 +756,12 @@ def playlist(api, gm_tracks, b_playlists):
             if t_count > 0:
                 pl_name = playlist_name + str(int(t_count / pl_track_max))
             # create playlist
+            logmsg('creating google music playlist: {0}'.format(pl_name))
             if not dryrun:
                 playlist_id = api.create_playlist(pl_name)
-                logmsg('created google music playlist: {0}'.format(pl_name))
 
             # loop through songs
-            p_tracks = []
+            pl_tracks = 0
             while t_count < len(tracks):
                 t_key = tracks[t_count]
                 # count all the tracks
@@ -778,22 +778,25 @@ def playlist(api, gm_tracks, b_playlists):
                     logmsg('google music track has no id: {0}, {1}'.format(
                             pl_name, t_key), True)
                     continue
-                track_id = gm_tracks[t_key]['id']
+ 
+                # add track to playlist (order is preserved)
+                # add one track at a time to avoid big changes which confuse
+                # android google play music sync
+                logmsg('adding track to {0}: {1}'.format(pl_name, t_key))
+                if not dryrun:
+                    api.add_songs_to_playlist(playlist_id,
+                                              gm_tracks[t_key]['id'])
+                    # wait a bit to avoid appearnce of denial of service
+                    time.sleep(2)
 
-                p_tracks.append(track_id)
-                logmsg('added track to {0}: {1}'.format(pl_name, t_key))
+                # count all added tracks
+                pl_tracks += 1
 
                 # see if we need to close this playlist and start a new one
-                if len(p_tracks) == pl_track_max:
+                if pl_tracks >= pl_track_max:
                     # close out this playlist
+                    logmsg('playlist full, incrementing: {0}'.format(pl_name))
                     break
-
-            # add tracks to playlist (hopefully order is preserved)
-            if not dryrun:
-                api.add_songs_to_playlist(playlist_id, p_tracks)
-                logmsg('called add_songs_to_playlist for {0}'.format(pl_name))
-                # wait a bit to avoid appearnce of denial of service
-                time.sleep(2)
 
     return True
 
