@@ -7,9 +7,11 @@ module and then write a tool to push Banshee metadata to Google Music
 via https://github.com/simon-weber/Mirror-MediaMonkey-to-Google-Music.
 
 README                    this file
+banshee-2flac.pl          convert file in banshee database to flac
 banshee-db-sync.pl        set playcount information from old library to new one
 banshee-fs-diff.pl        consistency check between database and file system
 banshee-gm.py             push banshee information to google music
+banshee-media-art.pl      output path to media art for banshee album
 banshee-playlist.pl       extract playlists from banshee library
 banshee-recent.pl         list recently played or added banshee tracks
-banshee-uri.pl            correct uri of tracks (one off script)
+banshee-uri.pl            correct uri of tracks (one-off script)
