@@ -11,7 +11,7 @@ use Pod::Usage;
 use URI::Escape;
 
 my $pkg = 'banshee-2flac';
-my $version = '0.2';
+my $version = '0.3';
 
 my ($check, $ignore_case, $verbose);
 my %new = (ext => '.flac', mime => 'taglib/flac');
@@ -88,7 +88,9 @@ while (my $row = $track_s->fetchrow_arrayref) {
     my $ext = $mime;
     $ext =~ s,^taglib/,,;
     my $flac = $path;
+    my $flac_uri = $uri;
     $flac =~ s/\.$ext$/$new{ext}/;
+    $flac_uri =~ s/\.$ext$/$new{ext}/;
     if (!-f $flac) {
         if ($ignore_case) {
             # try a case insensitive match (need to have a glob character)
@@ -102,6 +104,12 @@ while (my $row = $track_s->fetchrow_arrayref) {
             }
             # else
             $flac = $match;
+            # do our best on uri
+            $flac_uri = "file://$flac";
+            $flac_uri =~ s/ /%20/g;
+            $flac_uri =~ s/\[/%5B/g;
+            $flac_uri =~ s/\]/%5D/g;
+            $flac_uri =~ s/\#/%23/g;
         }
         else {
             warn("$pkg: no flac file matched: $flac\n");
@@ -111,12 +119,6 @@ while (my $row = $track_s->fetchrow_arrayref) {
 
     # get file size
     my $flac_size = -s $flac;
-
-    # set flac uri
-    my $flac_uri = "file://$flac";
-    $flac_uri =~ s/ /%20/g;
-    $flac_uri =~ s/\[/%5B/g;
-    $flac_uri =~ s/\]/%5D/g;
 
     # update track
     ++$updates;
